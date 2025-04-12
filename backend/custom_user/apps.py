@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class UserAuthConfig(AppConfig):
+class CustomUserConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'user_auth'
+    name = 'custom_user'
