@@ -1,15 +1,14 @@
-from django.shortcuts import render
-
-# Create your views here.
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from rest_framework.authtoken.models import Token
-from .serializers import CreateEmployeeSerializer
+from .serializers import CreateEmployeeSerializer, RequestResetSerializer, VerifyOTPSerializer, ResetPasswordSerializer
 from .models import User
 from django.contrib.auth import authenticate
-
+from django.contrib.auth import get_user_model
+from .models import PasswordResetOTP
+from .utils import send_otp_email
 
 class TestAuthenticatedView(APIView):
     permission_classes = [IsAuthenticated]
@@ -41,6 +40,70 @@ class LoginView(APIView):
             return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+# ------------- PASSWORD RESET -------------
+
+
+User = get_user_model()
+
+class RequestResetView(APIView):
+    def post(self, request):
+        serializer = RequestResetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        try:
+            user = User.objects.get(email=email)
+            if user.role in ['ADMIN', 'EMPLOYEE']:
+                send_otp_email(user)
+                return Response({"message": "OTP sent to email"})
+            return Response({"error": "Unauthorized role for password reset"}, status=403)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
+
+class VerifyOTPView(APIView):
+    def post(self, request):
+        serializer = VerifyOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # email = serializer.validated_data['email']
+        otp = serializer.validated_data['otp']
+
+        try:
+            # user = User.objects.get(email=email)
+            otp_entry = PasswordResetOTP.objects.filter(code=otp, is_used=False).last()
+
+            if otp_entry and not otp_entry.is_expired():
+                otp_entry.is_used = True
+                otp_entry.save()
+                return Response({"message": "OTP verified"})
+            return Response({"error": "Invalid or expired OTP"}, status=400)
+
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
+
+class ResetPasswordView(APIView):
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        new_password = serializer.validated_data['new_password']
+
+        try:
+            user = User.objects.get(email=email)
+            user.set_password(new_password)
+            user.save()
+            return Response({"message": "Password reset successfully"})
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+        
+
+
+
+# ------------ EMPLOYEE MANAGEMENT -----------
+
 class CreateEmployeeView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
@@ -52,4 +115,3 @@ class CreateEmployeeView(APIView):
             serializer.save()
             return Response({'message': 'Employee created successfully.'}, status=201)
         return Response(serializer.errors, status=400)
-    

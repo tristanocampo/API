@@ -12,3 +12,14 @@ class CreateEmployeeSerializer(serializers.ModelSerializer):
         validated_data['role'] = 'EMPLOYEE'
         validated_data['is_staff'] = True  # Optional: allows admin dashboard access
         return User.objects.create_user(**validated_data)
+
+class RequestResetSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+class VerifyOTPSerializer(serializers.Serializer):
+    # email = serializers.EmailField()
+    otp = serializers.CharField(max_length=6)
+
+class ResetPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    new_password = serializers.CharField(min_length=6)
